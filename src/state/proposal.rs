@@ -22,12 +22,12 @@ pub struct ProposalState {
 impl ProposalState {
     pub const LEN: usize = 8 + 8 + 1 + 1 + 32 * 10 + 32 * 10 + 32 * 10 + 8; // Adjust size as needed
 
-    pub fn from_account_info_unchecked(account_info: &mut AccountInfo) -> &mut Self {
+    pub fn from_account_info_unchecked(account_info: &AccountInfo) -> &mut Self {
         unsafe { &mut *(account_info.borrow_mut_data_unchecked().as_ptr() as *mut Self) }
     }
 
     pub fn from_account_info(
-        account_info: &mut AccountInfo,
+        account_info: &AccountInfo,
     ) -> Result<&mut Self, pinocchio::program_error::ProgramError> {
         if account_info.data_len() < Self::LEN {
             return Err(pinocchio::program_error::ProgramError::InvalidAccountData);
