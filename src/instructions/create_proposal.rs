@@ -22,9 +22,12 @@ pub fn process_create_proposal_instruction(accounts: &[AccountInfo], data: &[u8]
     ];
 
     let seeds = &seed[..];
-    let pda = pubkey::checked_create_program_address(seeds, &crate::ID).unwrap();
+    let pda = pubkey::checked_create_program_address(seeds, &crate::ID)
+        .map_err(|_| ProgramError::InvalidSeeds)?;
 
-    assert_eq!(&pda, proposal_account.key());
+    if &pda != proposal_account.key() {
+        return Err(ProgramError::InvalidAccountData);
+    }
 
     if proposal_account.owner() != &crate::ID {
         pinocchio_system::instructions::CreateAccount {
@@ -41,11 +44,19 @@ pub fn process_create_proposal_instruction(accounts: &[AccountInfo], data: &[u8]
 
     let proposal = ProposalState::from_account_info(proposal_account)?;
 
+    // Check if expity is in the future btw
+    let expiry = unsafe { *(data.as_ptr().add(16) as *const u64) };
+    let current_time = Clock::get()?.unix_timestamp as u64;
+    if expiry <= current_time {
+        return Err(ProgramError::InvalidInstructionData);
+    }
+
     proposal.bump = bump;
     proposal.proposal_id = Clock::get()?.slot;
     proposal.result = ProposalStatus::Draft;
     proposal.created_time = Clock::get()?.slot;
-    proposal.expiry = unsafe { *(data.as_ptr().add(16) as *const u64) }; //Extract the u64 value from the instruction data. Here, 16 means we move the pointer forward by 16 bytes, so it now points to the 17th byte in the slice.
+    proposal.expiry = expiry;
+
     proposal.active_members = [pubkey::Pubkey::default(); 10];
     proposal.votes = [0u8; 10]; //10 would be max number of active members
 
