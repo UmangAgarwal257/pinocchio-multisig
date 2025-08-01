@@ -1,3 +1,7 @@
+use crate::state::{
+    Multisig,
+    proposal::{ProposalState, ProposalStatus, TxType},
+};
 use pinocchio::{
     ProgramResult,
     account_info::AccountInfo,
@@ -5,25 +9,21 @@ use pinocchio::{
     pubkey,
     sysvars::{Sysvar, clock::Clock, rent::Rent},
 };
-
-use crate::state::proposal::{ProposalState, ProposalStatus};
 pub fn process_create_proposal_instruction(accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
     let [creator, proposal_account, multisig_account, _remaining @ ..] = accounts else {
         return Err(ProgramError::NotEnoughAccountKeys);
     };
 
+    let multisig = Multisig::from_account_info(multisig_account)?;
+
     let bump = unsafe { *(data.as_ptr() as *const u8) };
     let bump_bytes = bump.to_le_bytes();
-
     let seed = [
         (b"proposal"),
-        multisig_account.key().as_slice(),
+        multisig_account.key().as_ref(),
         bump_bytes.as_ref(),
     ];
-
-    let seeds = &seed[..];
-    let pda = pubkey::checked_create_program_address(seeds, &crate::ID).unwrap();
-
+    let pda = pubkey::checked_create_program_address(&seed[..], &crate::ID).unwrap();
     assert_eq!(&pda, proposal_account.key());
 
     if proposal_account.owner() != &crate::ID {
@@ -40,14 +40,14 @@ pub fn process_create_proposal_instruction(accounts: &[AccountInfo], data: &[u8]
     }
 
     let proposal = ProposalState::from_account_info(proposal_account)?;
-
     proposal.bump = bump;
-    proposal.proposal_id = Clock::get()?.slot;
-    proposal.result = ProposalStatus::Draft;
-    proposal.created_time = Clock::get()?.slot;
-    proposal.expiry = unsafe { *(data.as_ptr().add(16) as *const u64) }; //Extract the u64 value from the instruction data. Here, 16 means we move the pointer forward by 16 bytes, so it now points to the 17th byte in the slice.
-    proposal.active_members = [pubkey::Pubkey::default(); 10];
-    proposal.votes = [0u8; 10]; //10 would be max number of active members
+    proposal.multisig = *multisig_account.key();
+    proposal.transaction_index = multisig.transaction_index;
+    proposal.status = ProposalStatus::Draft;
+    proposal.tx_type = TxType::Base;
+    proposal.yes_votes = 0;
+    proposal.no_votes = 0;
+    proposal.expiry = Clock::get()?.slot;
 
     Ok(())
 }
