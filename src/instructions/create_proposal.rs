@@ -23,8 +23,14 @@ pub fn process_create_proposal_instruction(accounts: &[AccountInfo], data: &[u8]
         multisig_account.key().as_ref(),
         bump_bytes.as_ref(),
     ];
-    let pda = pubkey::checked_create_program_address(&seed[..], &crate::ID).unwrap();
-    assert_eq!(&pda, proposal_account.key());
+    let pda = match pubkey::create_program_address(&seed[..], &crate::ID) {
+        Ok(pda) => pda,
+        Err(_) => return Err(ProgramError::InvalidSeeds),
+    };
+
+    if &pda != proposal_account.key() {
+        return Err(ProgramError::InvalidSeeds);
+    }
 
     if proposal_account.owner() != &crate::ID {
         pinocchio_system::instructions::CreateAccount {
