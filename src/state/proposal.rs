@@ -42,7 +42,7 @@ pub struct ProposalState {
 }
 
 impl ProposalState {
-    pub const LEN: usize = 32 + 8 + 1 + 1 + 1 + 1 + 8 + 1;
+    pub const LEN: usize = size_of::<Self>();
 
     pub fn from_account_info_unchecked(account_info: &AccountInfo) -> &mut Self {
         unsafe { &mut *(account_info.borrow_mut_data_unchecked().as_ptr() as *mut Self) }
